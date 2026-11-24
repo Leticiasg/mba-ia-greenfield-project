@@ -1,0 +1,10 @@
+FROM node:25.6.0-slim
+
+# ffmpeg includes ffprobe; the worker extracts metadata and thumbnails with them
+# (phase-03-videos/TD-05, TD-06).
+RUN apt update && apt install -y --no-install-recommends ffmpeg procps \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /home/node/app
+
+USER node

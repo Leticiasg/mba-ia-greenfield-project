@@ -5,8 +5,12 @@ libs:
     context7_id: "/websites/bullmq_io"
     fetched_at: "2026-11-24T08:48:58-03:00"
   "@nestjs/bullmq":
-    version: "^12.0.2"
+    version: "^11.0.5"
     context7_id: "/nestjs/docs.nestjs.com/__branch__11.0.0"
+    fetched_at: "2026-11-24T08:48:58-03:00"
+  "ioredis":
+    version: "^5.11.1"
+    context7_id: "/websites/bullmq_io"
     fetched_at: "2026-11-24T08:48:58-03:00"
   "@aws-sdk/client-s3":
     version: "^3.1176.0"
@@ -30,7 +34,11 @@ sources_mtime:
 
 # Library References — phase-03-videos
 
-Versions are the latest published on npm on 2026-11-24 (`npm view <pkg> version`); none of these packages is installed yet in `nestjs-project/`. Peer compatibility checked: `@nestjs/bullmq@12.0.2` declares peers `@nestjs/common|core ^10 || ^11 || ^12` and `bullmq ^3 || ^4 || ^5 || ^6` — compatible with the installed NestJS 11.1.16.
+Versions are the latest published on npm on 2026-11-24 (`npm view <pkg> version`); none of these packages is installed yet in `nestjs-project/`. Peer compatibility checked: `@nestjs/bullmq@11.0.5` declares peers `@nestjs/common|core ^10 || ^11` and `bullmq ^3 || ^4 || ^5 || ^6` — compatible with the installed NestJS 11.1.16.
+
+**Version change during implementation (SI-03.7, 2026-11-24):** `@nestjs/bullmq` was first pinned at `^12.0.2`, but 12.x (and its `@nestjs/bull-shared` 12.x) is published as an ES module only (`"type": "module"`), which the project's CommonJS Jest setup cannot load. Pinned to `^11.0.5` (last 11.x, CommonJS, same API) with the user's approval.
+
+**Added during implementation (SI-03.7, 2026-11-24):** `ioredis@^5.11.1`. BullMQ 6 declares `ioredis` as an optional peer dependency (`>=5.0.0`) and does not install it; without it every `Queue`/`QueueEvents` fails with "BullMQ could not load the optional 'ioredis' package".
 
 Infrastructure images pinned by the decisions (not npm libraries, listed for completeness):
 

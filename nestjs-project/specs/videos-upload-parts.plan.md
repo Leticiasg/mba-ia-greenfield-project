@@ -16,7 +16,7 @@ target_file: nestjs-project/test/videos-upload-parts.e2e-spec.ts
 
 ### 1. Part URLs and listing
 
-**Setup:** `beforeEach` truncates the test DB tables; bootstrap `AppModule` reproducing `main.ts` global config; create two confirmed users (owner and other) with channels and obtain both access tokens; as the owner, `POST /videos` with `fileSize: 12582912` (≥ 2 parts at the default part size) and keep `publicId`/`partCount`. `NODE_ENV=test` makes presigned URLs use `http://minio:9000`.
+**Setup:** `beforeEach` truncates the test DB tables; bootstrap `AppModule` reproducing `main.ts` global config; create two confirmed users (owner and other) with channels and obtain both access tokens; as the owner, `POST /videos` with `fileSize` = part size + 1024 bytes (2 parts at any configured part size) and keep `publicId`/`partCount`. `NODE_ENV=test` makes presigned URLs use `http://minio:9000`.
 
 #### 1.1. issues-urls-for-requested-parts
 
@@ -37,11 +37,11 @@ target_file: nestjs-project/test/videos-upload-parts.e2e-spec.ts
 **Last sync:** 2026-11-24T12:31:39Z
 
 **Steps:**
-  1. Request the URL for part 1, then `PUT` `partSize` bytes of filler data to it
+  1. Request the URL for part 1, then `PUT` 1024 bytes of filler data to it (part size minimums apply only at completion)
     - expect: storage responds `200` with an `ETag` header
   2. GET /videos/:publicId/upload/parts as owner
     - expect: status `200`
-    - expect: `parts` contains `{ partNumber: 1, eTag: <same ETag>, size: partSize }`
+    - expect: `parts` contains `{ partNumber: 1, eTag: <same ETag>, size: 1024 }`
 
 #### 1.3. rejects-part-number-above-part-count
 
