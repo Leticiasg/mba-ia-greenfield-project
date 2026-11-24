@@ -121,7 +121,8 @@
 
 - Cleanup of abandoned uploads: stale `draft` videos and orphan multipart uploads (MinIO does not support the `AbortIncompleteMultipartUpload` lifecycle) — TD-12.
 - A video can stay `processing` without a job if enqueueing fails right after the `draft → processing` transition (SI-03.7).
-- `docs/diagrams/software-arch.mermaid` still labels the Message Queue "TBD".
-- Root `CLAUDE.md` still says `next-frontend/` is "not yet initialized".
+- ~~`docs/diagrams/software-arch.mermaid` still labels the Message Queue "TBD".~~ Resolved after the phase commit: the label now reads "BullMQ + Redis".
+- ~~Root `CLAUDE.md` still says `next-frontend/` is "not yet initialized".~~ Resolved after the phase commit: the line now describes the Next.js 16 frontend.
+- Resolved after the phase commit: the diagram said the API "Uploads" to storage and the frontend only "Streams"; per TD-02 the client sends the parts straight to storage and the API only signs URLs and manages the multipart upload. The diagram and the root `CLAUDE.md` now say so.
 - `src/test/create-test-data-source.ts` reads `DB_DATABASE` while the app uses `DB_NAME` (pre-existing; falls back to `streamtube`).
 - 62 `npm audit` vulnerabilities reported in the dependency tree (pre-existing).
