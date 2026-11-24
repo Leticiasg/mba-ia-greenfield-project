@@ -50,6 +50,8 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 
 **Decision:** A (BullMQ + Redis via `@nestjs/bullmq`)
 
+**Note:** Decision follows the Recommendation — BullMQ is the only option that combines an official Nest 11 integration with built-in retry/backoff and permanent-failure semantics, and it adds a dedicated queue service to Compose, which the acceptance criteria evaluate.
+
 ---
 
 ## TD-02: Large-File Upload Protocol (up to 10GB)
@@ -81,6 +83,8 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 
 **Decision:** A (Presigned S3 multipart upload)
 
+**Note:** Decision follows the Recommendation — presigned multipart is the only option that handles 10GB on real S3, keeps the file bytes out of the API (avoiding the automatic-fail condition) and makes uploads resumable without an extra service.
+
 ---
 
 ## TD-03: Upload Session Policy (size limit, part size, URL issuance and expiry)
@@ -107,6 +111,8 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 
 **Decision:** B (Server-defined part size, part URLs issued on demand, size re-checked at complete)
 
+**Note:** Decision follows the Recommendation — issuing part URLs on demand keeps them short-lived without breaking long 10GB uploads, and re-checking the object size at completion enforces the 10GB limit even if the client misreports `fileSize`.
+
 ---
 
 ## TD-04: Upload Completion Signal (what triggers processing)
@@ -132,6 +138,8 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 **Recommendation:** **Option A** — keeps one portable, guard-protected code path that is identical on MinIO and S3, and lets the API own the `draft → processing` transition in the same request that enqueues the job.
 
 **Decision:** A (Client calls the API complete endpoint)
+
+**Note:** Decision follows the Recommendation — a client-called complete endpoint keeps a single guard-protected, testable flow that behaves the same on MinIO and S3, and lets the API own the `draft → processing` transition together with the enqueue.
 
 ---
 
@@ -163,6 +171,8 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 **Recommendation:** **Option A** — gives a real, separate worker container (as the architecture requires) while keeping a single source of truth for the `videos` entity, config and storage code, and a single DoD pipeline.
 
 **Decision:** A (Same NestJS codebase, separate entrypoint and `video-worker` container)
+
+**Note:** Decision follows the Recommendation — a separate container keeps FFmpeg CPU load out of the API (as the architecture requires), while a single codebase avoids duplicating the `videos` entity, config and storage code and keeps one DoD pipeline.
 
 ---
 
@@ -223,6 +233,8 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 
 **Decision:** A (Presigned GET URL as FFmpeg input)
 
+**Note:** Decision follows the Recommendation — the worker only needs metadata and one frame, which FFmpeg reads through range requests; copying up to 10GB to disk first would waste time and require a large worker volume.
+
 ---
 
 ## TD-08: Thumbnail Frame Selection
@@ -254,6 +266,8 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 
 **Decision:** B (10% of duration, clamped)
 
+**Note:** Decision follows the Recommendation — a frame at 10% of the duration is deterministic, cheap and usually past black intro frames; custom thumbnails belong to Phase 04.
+
 ---
 
 ## TD-09: Storage Layout (buckets and object keys)
@@ -280,6 +294,8 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 
 **Decision:** A (One private bucket, UUID-based prefixes)
 
+**Note:** Decision follows the Recommendation — one private bucket with UUID-based keys is the least configuration for both file kinds, and deterministic keys make worker re-runs idempotent.
+
 ---
 
 ## TD-10: Presigned URL Host (internal vs. public storage endpoint)
@@ -305,6 +321,8 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 **Recommendation:** **Option A** — it keeps the repository self-contained (no host file edits) and honors the Docker networking rule, at the cost of one extra config key. The e2e test strategy for following URLs is settled in TD-14.
 
 **Decision:** A (Internal endpoint for server calls + public endpoint for presigning)
+
+**Note:** Decision follows the Recommendation — separate internal and public endpoints respect the Docker networking rule (service names between containers) while still producing presigned URLs that clients outside Docker can use, without editing host files.
 
 ---
 
@@ -347,6 +365,8 @@ Registry check on 2026-11-24 (`docker manifest inspect`, metadata only, `postgre
 
 **Decision:** B (Chainguard MinIO image pinned by digest) — `cgr.dev/chainguard/minio@sha256:f2e56aceb4d38ad9b05c901270946e2353b19f86ba4396f25cf75b15b455b38c`. Entrypoint, command and runtime user to be confirmed on first pull; the digest is to be recorded in `library-refs.md` by `plan-resolve`.
 
+**Note:** Decision follows the (updated) Recommendation — the official MinIO registries no longer serve the image (checked on 2026-11-24), and the Chainguard build is the only MinIO distribution that can be pulled today without building from source.
+
 ---
 
 ## TD-12: Video Status Lifecycle and Failure Handling
@@ -377,6 +397,8 @@ Registry check on 2026-11-24 (`docker manifest inspect`, metadata only, `postgre
 **Recommendation:** **Option A** — matches the evaluated cycle one-to-one, survives transient failures automatically, gives an immediate `error` for invalid files, and avoids overloading "draft" with Phase 04's publication meaning.
 
 **Decision:** A (Single 4-state enum; retries with backoff for transient errors, immediate `error` for invalid media)
+
+**Note:** Decision follows the Recommendation — the four states match the cycle the challenge evaluates; retries absorb transient failures, invalid media fails fast, conditional transitions make duplicate deliveries harmless, and Phase 04 publication stays in a separate column.
 
 ---
 
@@ -409,6 +431,8 @@ Registry check on 2026-11-24 (`docker manifest inspect`, metadata only, `postgre
 
 **Decision:** B (Random base64url short id in a unique column)
 
+**Note:** Decision follows the Recommendation — an 11-character random base64url id is short, non-enumerable and unique by database constraint, with no new dependency.
+
 ---
 
 ## TD-14: Streaming and Download Delivery
@@ -440,6 +464,8 @@ Registry check on 2026-11-24 (`docker manifest inspect`, metadata only, `postgre
 
 **Decision:** A (Redirect to a short-lived presigned GET URL)
 
+**Note:** Decision follows the Recommendation — redirecting to a short-lived presigned URL delegates Range/206 to the storage and keeps video bytes out of the API, while access is still checked on every URL issued.
+
 ---
 
 ## TD-15: Access Policy for Status, Streaming and Download in Phase 03
@@ -465,6 +491,8 @@ Registry check on 2026-11-24 (`docker manifest inspect`, metadata only, `postgre
 **Recommendation:** **Option A** — the safe default while publication does not exist; it relies on the existing guard and lets Phase 04 own the public/unlisted rules.
 
 **Decision:** A (Owner-only in Phase 03; Phase 04 opens access by visibility)
+
+**Note:** Decision follows the Recommendation — every video in this phase is unpublished, so owner-only access avoids exposing content before Phase 04 defines publication and visibility.
 
 ---
 
