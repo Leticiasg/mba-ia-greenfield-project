@@ -132,7 +132,7 @@ Deliver video upload of up to 10GB straight to S3-compatible object storage (pre
 ### SI-03.5 — Endpoint POST /videos (iniciar upload e pré-cadastrar rascunho)
 
 **Route:** POST /videos
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-create.plan.md`
 **Authorization:** Authenticated (cria o vídeo no canal do próprio usuário)
 
 **Description:** Inicia o upload criando o vídeo em `draft` e o multipart upload no storage, e devolve o plano de partes — a API nunca recebe os bytes do arquivo.
@@ -169,7 +169,7 @@ Deliver video upload of up to 10GB straight to S3-compatible object storage (pre
 ### SI-03.6 — Endpoints de partes: URLs sob demanda e listagem para retomada
 
 **Route:** POST /videos/:publicId/upload/parts, GET /videos/:publicId/upload/parts
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-upload-parts.plan.md`
 **Authorization:** Owner
 
 **Description:** Entrega URLs pré-assinadas de curta duração para as partes pedidas e lista as partes já armazenadas, permitindo retomar um upload interrompido.
@@ -204,7 +204,7 @@ Deliver video upload of up to 10GB straight to S3-compatible object storage (pre
 ### SI-03.7 — Endpoint de conclusão do upload e publicação na fila
 
 **Route:** POST /videos/:publicId/upload/complete
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-upload-complete.plan.md`
 **Authorization:** Owner
 
 **Description:** Conclui o multipart, confere o tamanho real do objeto, move o vídeo para `processing` e publica o job de processamento na mesma requisição.
@@ -302,7 +302,7 @@ A execução real de ffprobe/ffmpeg é coberta pelo e2e do SI-03.11 através do 
 ### SI-03.10 — Endpoints de status, streaming, download e thumbnail
 
 **Route:** GET /videos/:publicId, GET /videos/:publicId/stream, GET /videos/:publicId/download, GET /videos/:publicId/thumbnail
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-playback.plan.md`
 **Authorization:** Owner
 
 **Description:** Expõe o status do vídeo e redireciona streaming, download e thumbnail para URLs pré-assinadas de curta duração, deixando o `Range`/`206` a cargo do storage.
@@ -335,7 +335,7 @@ A execução real de ffprobe/ffmpeg é coberta pelo e2e do SI-03.11 através do 
 ### SI-03.11 — Fluxo completo upload → processamento → streaming
 
 **Route:** POST /videos → POST /videos/:publicId/upload/parts → POST /videos/:publicId/upload/complete → GET /videos/:publicId → GET /videos/:publicId/stream
-**Test Specs:** _pending /plan-test-specs_
+**Test Specs:** see `nestjs-project/specs/videos-pipeline.plan.md`
 **Authorization:** Owner
 
 **Description:** Prova o fluxo ponta a ponta com a infraestrutura real do Compose (API, MinIO, Redis e o container `video-worker`) e atualiza o contrato OpenAPI exportado.
