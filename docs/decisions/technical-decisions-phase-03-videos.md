@@ -345,6 +345,7 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 **Revisions:**
 
 - 2026-11-24 — Test environment: when `NODE_ENV=test`, `S3_PUBLIC_ENDPOINT` equals the internal endpoint (`http://minio:9000`), so the e2e running inside the `nestjs-api` container follows the `302` `Location` of the stream/download endpoints and asserts `206`, `Content-Range` and body length against MinIO. Rationale: resolves validation IC-1 (TD-10 and TD-14 deferred the e2e URL-following strategy to each other).
+- 2026-11-24 — Signing client per consumer: presigned URLs consumed inside the Compose network (the worker's FFmpeg input, TD-07) are signed with the internal client (`S3_ENDPOINT`); only URLs returned to HTTP clients (upload part URLs, stream and download redirects) are signed with the public client (`S3_PUBLIC_ENDPOINT`). Rationale: resolves validation IC-2 (the indexed wording "public endpoint for presigning" would sign the worker's URL with a host unreachable from the `video-worker` container, a failure hidden in tests where both endpoints are equal).
 
 ---
 

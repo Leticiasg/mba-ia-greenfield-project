@@ -3,8 +3,8 @@ kind: phase
 name: phase-03-videos
 sources_mtime:
   docs/project-plan.md: "2026-11-22T23:52:23-03:00"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-24T08:48:35-03:00"
-  docs/phases/phase-03-videos/library-refs.md: "2026-11-24T08:49:24-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-24T09:00:29-03:00"
+  docs/phases/phase-03-videos/library-refs.md: "2026-11-24T09:01:29-03:00"
   docs/decisions/technical-decisions-openapi-docs-nestjs.md: "2026-11-22T23:52:32-03:00"
   docs/phases/phase-01-configuracao-base/context.md: "2026-11-22T23:52:32-03:00"
   docs/phases/phase-02-auth/context.md: "2026-11-22T23:52:32-03:00"
@@ -62,7 +62,7 @@ sources_mtime:
 | phase-03-videos/TD-08 | phase | Backend | Thumbnail Frame Selection | decided | B (10% of duration, clamped) | — |
 | phase-03-videos/TD-09 | phase | Backend | Storage Layout (buckets and object keys) | decided | A (One private bucket, UUID-based prefixes) | — |
 | phase-03-videos/TD-10 | phase | Repo-wide | Presigned URL Host (internal vs. public storage endpoint) | decided | A (Internal endpoint for server calls + public endpoint for presigning) | — |
-|     └─ Last revision: 2026-11-24 — Test environment: when `NODE_ENV=test`, `S3_PUBLIC_ENDPOINT` equals the… | | | | | | |
+|     └─ Last revision: 2026-11-24 — Signing client per consumer: presigned URLs consumed inside the Compose network… | | | | | | |
 | phase-03-videos/TD-11 | phase | Repo-wide | Local S3-Compatible Image Distribution | decided | B (Chainguard MinIO image pinned by digest) | — |
 | phase-03-videos/TD-12 | phase | Backend | Video Status Lifecycle and Failure Handling | decided | A (Single 4-state enum; retries w/ backoff, immediate `error` for invalid media) | — |
 | phase-03-videos/TD-13 | phase | Backend | Unique Public Video Identifier | decided | B (Random base64url short id in a unique column) | — |
@@ -187,6 +187,7 @@ _Source files:_
 **Revisions:**
 
 - 2026-11-24 — Test environment: when `NODE_ENV=test`, `S3_PUBLIC_ENDPOINT` equals the internal endpoint (`http://minio:9000`), so the e2e running inside the `nestjs-api` container follows the `302` `Location` of the stream/download endpoints and asserts `206`, `Content-Range` and body length against MinIO. Rationale: resolves validation IC-1 (TD-10 and TD-14 deferred the e2e URL-following strategy to each other).
+- 2026-11-24 — Signing client per consumer: presigned URLs consumed inside the Compose network (the worker's FFmpeg input, TD-07) are signed with the internal client (`S3_ENDPOINT`); only URLs returned to HTTP clients (upload part URLs, stream and download redirects) are signed with the public client (`S3_PUBLIC_ENDPOINT`). Rationale: resolves validation IC-2 (the indexed wording "public endpoint for presigning" would sign the worker's URL with a host unreachable from the `video-worker` container, a failure hidden in tests where both endpoints are equal).
 
 ### phase-03-videos/TD-11
 

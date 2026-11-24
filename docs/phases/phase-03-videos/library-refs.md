@@ -25,7 +25,7 @@ libs:
     context7_id: "—"
     fetched_at: "2026-11-24T08:48:58-03:00"
 sources_mtime:
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-24T08:48:35-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-24T09:00:29-03:00"
 ---
 
 # Library References — phase-03-videos

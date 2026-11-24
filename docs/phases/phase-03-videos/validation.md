@@ -2,7 +2,7 @@
 kind: phase
 name: phase-03-videos
 status: dirty
-issue_count: 1
+issue_count: 0
 sources_mtime:
   docs/phases/phase-03-videos/context.md: "2026-11-24T08:50:00-03:00"
   docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-24T08:48:35-03:00"
@@ -32,8 +32,9 @@ issues:
     summary: "How the video-worker container starts and stays on current code"
     resolved_by: phase-03-videos/TD-16
   - id: IC-2
-    status: open
+    status: resolved
     summary: "Worker FFmpeg presigned URL vs TD-10 'public endpoint for presigning'"
+    resolved_by: phase-03-videos/TD-10
 ---
 
 # phase-03-videos — Validation
@@ -42,7 +43,7 @@ issues:
 
 ### Inconsistencies
 
-- **IC-2** — `phase-03-videos/TD-07` decides "Presigned GET URL as FFmpeg input" (the worker, inside Compose, reads the source video through a presigned URL), while `phase-03-videos/TD-10` is indexed as "Internal endpoint for server calls + public endpoint for presigning". Read together, the worker's URL would be signed with `S3_PUBLIC_ENDPOINT` — the host-reachable address, which does not reach MinIO from inside the `video-worker` container outside `NODE_ENV=test` — and the host cannot be rewritten after signing. Processing would then fail in the development stack even though the test environment (TD-10 revision, both endpoints equal) passes, hiding the bug. Explicit choice: append a revision to TD-10 (or TD-07) stating which client signs each presigned URL — e.g., (a) URLs consumed inside Compose (worker FFmpeg input) are signed with the internal client; only URLs returned to HTTP clients (upload parts, stream, download) use the public client; or (b) the worker reads with the internal client via `GetObject` streams instead of a presigned URL (would change TD-07's chosen mechanism).
+_None._
 
 ### Ambiguities
 
@@ -76,3 +77,4 @@ _None._ _(UI Inventory is deferred — check not applicable.)_
 - **AMB-3** _(resolved_by phase-03-videos/TD-03)_ — Title source. Revision 2026-11-24 on TD-03: `title` optional at init, defaulting to the original filename without extension.
 - **AMB-4** _(resolved_by phase-03-videos/TD-03)_ — Init validation. Revision 2026-11-24 on TD-03: reject with 400 when `fileSize` is 0 or above 10GB, or `contentType` does not start with `video/`; ffprobe in the worker stays authoritative.
 - **AMB-5** _(resolved_by phase-03-videos/TD-16)_ — Worker runtime. Revision 2026-11-24 on TD-16: `video-worker` starts itself with `node --watch` + `ts-node` (no compile, nothing written to `dist/`).
+- **IC-2** _(resolved_by phase-03-videos/TD-10)_ — Worker FFmpeg presigned URL vs TD-10 "public endpoint for presigning". Revision 2026-11-24 on TD-10: URLs consumed inside Compose (worker FFmpeg input) are signed with the internal client; only URLs returned to HTTP clients use the public client.
