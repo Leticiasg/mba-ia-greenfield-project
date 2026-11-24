@@ -52,6 +52,12 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 
 **Note:** Decision follows the Recommendation — BullMQ is the only option that combines an official Nest 11 integration with built-in retry/backoff and permanent-failure semantics, and it adds a dedicated queue service to Compose, which the acceptance criteria evaluate.
 
+**Libraries:** bullmq, @nestjs/bullmq
+
+**Revisions:**
+
+- 2026-11-24 — Queue broker image pinned to the official `redis:8.2-alpine@sha256:da23c2478319ceb4903857d77a2fd7aa5137d9e9d4c8165dafbacedac6403e95`, run with `maxmemory-policy noeviction` (BullMQ production requirement). Rationale: TD-01 left the broker image to be pinned in plan-resolve; official Redis keeps the TD's "BullMQ + Redis" wording and docs consistent (Valkey considered and not chosen).
+
 ---
 
 ## TD-02: Large-File Upload Protocol (up to 10GB)
@@ -85,6 +91,8 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 
 **Note:** Decision follows the Recommendation — presigned multipart is the only option that handles 10GB on real S3, keeps the file bytes out of the API (avoiding the automatic-fail condition) and makes uploads resumable without an extra service.
 
+**Libraries:** @aws-sdk/client-s3, @aws-sdk/s3-request-presigner
+
 ---
 
 ## TD-03: Upload Session Policy (size limit, part size, URL issuance and expiry)
@@ -112,6 +120,10 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 **Decision:** B (Server-defined part size, part URLs issued on demand, size re-checked at complete)
 
 **Note:** Decision follows the Recommendation — issuing part URLs on demand keeps them short-lived without breaking long 10GB uploads, and re-checking the object size at completion enforces the 10GB limit even if the client misreports `fileSize`.
+
+**Revisions:**
+
+- 2026-11-24 — Init request contract and validation: `title` is optional at init and defaults to the original filename without extension (title editing stays in Phase 04); init rejects with 400 when `fileSize` is 0 or above the 10GB cap, or when the declared `contentType` does not start with `video/`. The worker's ffprobe remains the authoritative media check (invalid media → `error`, per TD-12). Rationale: resolves validation AMB-3 (title source at draft creation) and AMB-4 (validation applied at init).
 
 ---
 
@@ -206,6 +218,12 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 **Decision:** B (`fluent-ffmpeg`)
 
 **Note:** Decision deliberately diverged from the Recommendation — `fluent-ffmpeg` was chosen for familiarity and learning value in the context of this course project, accepting that the package is deprecated on npm and its repository is archived (no maintenance). `fluent-ffmpeg` still shells out to the system binaries, so the worker image must install `ffmpeg`/`ffprobe` via apt (same image requirement as Option A). Its use stays isolated behind a small worker service so it can be swapped for Option A later without touching callers.
+
+**Libraries:** fluent-ffmpeg, @types/fluent-ffmpeg
+
+**Revisions:**
+
+- 2026-11-24 — Metadata set and storage: `duration_seconds` is a typed column; the remaining extracted metadata is stored in a single JSONB `metadata` column with a fixed key set — `width`, `height`, `videoCodec`, `audioCodec`, `formatName`, `bitRate`, `frameRate`, `sizeBytes` (keys may be null, e.g., no audio stream). The raw ffprobe output is not persisted. Rationale: resolves validation AMB-2 (which metadata and how it is persisted).
 
 ---
 
@@ -323,6 +341,10 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 **Decision:** A (Internal endpoint for server calls + public endpoint for presigning)
 
 **Note:** Decision follows the Recommendation — separate internal and public endpoints respect the Docker networking rule (service names between containers) while still producing presigned URLs that clients outside Docker can use, without editing host files.
+
+**Revisions:**
+
+- 2026-11-24 — Test environment: when `NODE_ENV=test`, `S3_PUBLIC_ENDPOINT` equals the internal endpoint (`http://minio:9000`), so the e2e running inside the `nestjs-api` container follows the `302` `Location` of the stream/download endpoints and asserts `206`, `Content-Range` and body length against MinIO. Rationale: resolves validation IC-1 (TD-10 and TD-14 deferred the e2e URL-following strategy to each other).
 
 ---
 
@@ -494,6 +516,10 @@ Registry check on 2026-11-24 (`docker manifest inspect`, metadata only, `postgre
 
 **Note:** Decision follows the Recommendation — every video in this phase is unpublished, so owner-only access avoids exposing content before Phase 04 defines publication and visibility.
 
+**Revisions:**
+
+- 2026-11-24 — Phase boundary: the phase affects only `nestjs-project/` (`next-frontend/` deferred). Out of scope: video screens/frontend; title, description and category editing; custom thumbnail; publication and visibility (all Phase 04). Rationale: resolves validation AMB-1 (`project-plan.md` names no subproject and no exclusions for Fase 03).
+
 ---
 
 ## TD-16: Testing the Asynchronous Pipeline with Real Infrastructure
@@ -521,6 +547,10 @@ Registry check on 2026-11-24 (`docker manifest inspect`, metadata only, `postgre
 **Decision:** B (e2e relies on the running `video-worker` container)
 
 **Note:** Decision deliberately diverged from the Recommendation — exercising the real deployment topology end to end (API → queue → worker container → storage/DB) was preferred over running the worker in-process. Consequences to handle in the plan: the e2e polls the video status with a bounded timeout; the `video-worker` container must run the current code before e2e runs (restart or watch mode); and the e2e must not compete with other suites for jobs (`--runInBand` already applies). The API image does not need FFmpeg under this option.
+
+**Revisions:**
+
+- 2026-11-24 — Worker runtime in development: the `video-worker` Compose service starts the worker itself in watch mode with `node --watch` + `ts-node` (no compile step, nothing written to `dist/`), so it never races the API's `dist/` on the shared volume and always runs current code when the e2e starts. Rationale: resolves validation AMB-5 (TD-16 note left "restart or watch mode" open).
 
 ---
 
