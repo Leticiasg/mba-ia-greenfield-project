@@ -12,6 +12,30 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Separate worker process: same code, own entrypoint, FFmpeg installed
+  # (phase-03-videos/TD-05). node --watch + ts-node runs src/ directly and
+  # restarts on changes without writing to dist/ (TD-16, revision 2026-11-24).
+  video-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    command: ["npm", "run", "start:worker:dev"]
+    environment:
+      - TS_NODE_TRANSPILE_ONLY=true
+    volumes:
+      - .:/home/node/app
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   db:
     image: postgres:17
@@ -32,5 +56,40 @@ services:
     ports:
       - "1025:1025"
       - "8025:8025"
+
+  # S3-compatible object storage — Chainguard build of MinIO pinned by digest
+  # (phase-03-videos/TD-11). Entrypoint is /usr/bin/minio, so only args go here.
+  minio:
+    image: cgr.dev/chainguard/minio@sha256:f2e56aceb4d38ad9b05c901270946e2353b19f86ba4396f25cf75b15b455b38c
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      - MINIO_ROOT_USER=${S3_ACCESS_KEY}
+      - MINIO_ROOT_PASSWORD=${S3_SECRET_KEY}
+      - MC_HOST_local=http://${S3_ACCESS_KEY}:${S3_SECRET_KEY}@localhost:9000
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Queue broker for BullMQ — noeviction is required by BullMQ (phase-03-videos/TD-01).
+  redis:
+    image: redis:8.2-alpine@sha256:da23c2478319ceb4903857d77a2fd7aa5137d9e9d4c8165dafbacedac6403e95
+    command: ["redis-server", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  minio-data:
 
 
