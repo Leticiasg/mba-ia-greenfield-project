@@ -111,11 +111,12 @@
 
 ## Final verification
 
-- **Unit + integration** (`docker compose exec nestjs-api npm test -- --runInBand`): 215 passing, 36 suites.
+- **Unit + integration** (`docker compose exec nestjs-api npm test`; the script runs `jest --runInBand`): 215 passing, 36 suites.
 - **E2E** (`docker compose exec nestjs-api npm run test:e2e`, with `minio`, `redis` and `video-worker` running): 72 passing, 8 suites.
 - **Type-check** (`docker compose exec nestjs-api npx tsc --noEmit`): exit 0.
 - **Lint** (`docker compose exec nestjs-api npm run lint`): 0 errors; 23 pre-existing `no-unsafe-argument` warnings in `src/auth` specs; `--fix` changed no file.
 - **Fix during final verification (attempt 1/3):** the first full `npm run test:e2e` failed in every video suite (e.g., `POST /auth/login` → 500 in setup) because the script ran suites in parallel and they truncate the shared DB concurrently. `nestjs-project/CLAUDE.md` already required e2e to run with `--runInBand` and described `test:e2e` as "already configured", but the script lacked it (Phase 02 had a single DB-backed e2e suite, so it never showed). Added `--runInBand` to the `test:e2e` script; rerun green.
+- **Fix after the phase commit (independent review):** a reviewer running plain `npm test` got 11 of 215 tests failing in 5 integration suites (`relation "videos" does not exist`, FK violations): the suites ran in parallel on the shared DB while `migrations.integration-spec` reverted migrations. The phase had been verified with `npm test -- --runInBand`, as `nestjs-project/CLAUDE.md` required, but the `test` script itself lacked the flag (pre-existing on `dev`). Added `--runInBand` to the `test` script and aligned `nestjs-project/CLAUDE.md`; plain `npm test` now passes 215/215, `test:e2e` 72/72, `tsc` exit 0, lint 0 errors.
 
 ## Follow-ups (out of scope)
 

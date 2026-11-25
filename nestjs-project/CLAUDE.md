@@ -72,7 +72,7 @@ npm run start:dev                        # Dev server with hot-reload
 npm run build                            # Compile to dist/
 npm run start:prod                       # Run compiled build
 
-npm test                                 # Unit tests
+npm test                                 # Unit + integration tests (always with --runInBand)
 npm run test:watch                       # Unit tests in watch mode
 npm run test:cov                         # Coverage report
 npm run test:e2e                         # End-to-end tests (always with --runInBand)
@@ -93,10 +93,10 @@ curl http://localhost:3000
 
 ### Test execution
 
-Integration and e2e suites share a single test database. They **must** be run with `--runInBand`:
+Integration and e2e suites share a single test database. They **must** run with `--runInBand`; both scripts already pass it:
 
 ```bash
-docker compose exec nestjs-api npm test -- --runInBand
+docker compose exec nestjs-api npm test            # already configured
 docker compose exec nestjs-api npm run test:e2e   # already configured
 ```
 
