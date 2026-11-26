@@ -13,6 +13,11 @@ docker compose ps   # all services must show status "running"
 Then verify each infrastructure service is actually ready to accept connections — not just running:
 
 - **PostgreSQL:** `docker compose exec db pg_isready -U streamtube` — expect `accepting connections`
+- **MinIO:** `docker compose ps minio` — expect `healthy` (healthcheck runs `mc ready local`)
+- **Redis:** `docker compose exec redis redis-cli ping` — expect `PONG`
+- **Video worker:** `docker compose logs video-worker` — expect `Video worker started`
+
+The `video-worker` service is infrastructure: it starts with `docker compose up -d` and processes jobs on its own (it is not the API dev server).
 
 Only start the NestJS dev server (`npm run start:dev`) when the user **explicitly** asks to run the application — never as part of "start the environment".
 
@@ -34,6 +39,10 @@ docker compose exec nestjs-api npm run start:dev
 Services:
 - `nestjs-api` — NestJS API, port `3000`
 - `db` — PostgreSQL 17, port `5432`, database `streamtube`, user/password `streamtube`
+- `mailpit` — SMTP `1025`, web UI `8025`
+- `minio` — S3-compatible object storage (Chainguard MinIO image pinned by digest), S3 API port `9000`, console `9001`, credentials from `S3_ACCESS_KEY`/`S3_SECRET_KEY`
+- `redis` — Redis 8.2 (pinned by digest), port `6379`, runs with `maxmemory-policy noeviction` (required by BullMQ)
+- `video-worker` — video processing worker (`Dockerfile.worker`, FFmpeg installed); runs `npm run start:worker:dev` (`node --watch` + `ts-node` on `src/worker.ts`) and restarts on source changes
 
 All verification and teardown commands run on the **host machine**:
 
@@ -63,7 +72,7 @@ npm run start:dev                        # Dev server with hot-reload
 npm run build                            # Compile to dist/
 npm run start:prod                       # Run compiled build
 
-npm test                                 # Unit tests
+npm test                                 # Unit + integration tests (always with --runInBand)
 npm run test:watch                       # Unit tests in watch mode
 npm run test:cov                         # Coverage report
 npm run test:e2e                         # End-to-end tests (always with --runInBand)
@@ -84,10 +93,10 @@ curl http://localhost:3000
 
 ### Test execution
 
-Integration and e2e suites share a single test database. They **must** be run with `--runInBand`:
+Integration and e2e suites share a single test database. They **must** run with `--runInBand`; both scripts already pass it:
 
 ```bash
-docker compose exec nestjs-api npm test -- --runInBand
+docker compose exec nestjs-api npm test            # already configured
 docker compose exec nestjs-api npm run test:e2e   # already configured
 ```
 
@@ -148,6 +157,55 @@ NestJS with standard module structure. Source lives in `src/`, compiled output i
 
 - Each domain feature gets its own module (e.g., `UsersModule`, `VideosModule`) registered in `AppModule`
 - Controllers handle HTTP routing; Services hold business logic; both are scoped to their module
+
+## Videos (Phase 03)
+
+Upload, processing and playback of videos. Decisions: `docs/decisions/technical-decisions-phase-03-videos.md`; plan: `docs/phases/phase-03-videos/phase-03-videos.md`.
+
+### Modules and files
+
+- `src/videos/` — `VideosModule` (controller, `VideosService`, DTOs, `Video` entity, domain exceptions). Migration: `src/database/migrations/1795524222940-CreateVideos.ts`.
+- `src/storage/` — `StorageModule`: two `S3Client`s (`forcePathStyle`) — internal (`S3_ENDPOINT`) for server calls and public (`S3_PUBLIC_ENDPOINT`) only to sign URLs returned to HTTP clients. Ensures the bucket on boot.
+- `src/queue/` — `QueueModule`: BullMQ connection and the `video-processing` queue (job `video.process`, payload `{ videoId }`, `jobId` = video id, 3 attempts, exponential backoff).
+- `src/videos/processing/` — `VideoProcessingModule` (`VideoProcessor`, `MediaProbeService` over `fluent-ffmpeg`), loaded **only** by the worker.
+- `src/worker.ts` + `src/worker.module.ts` — worker entrypoint (`NestFactory.createApplicationContext`, no HTTP).
+
+### Endpoints (all require `Authorization: Bearer`, owner-only; another user's video → `404 VIDEO_NOT_FOUND`)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/videos` | Pre-register a `draft` and open the multipart upload; returns `publicId`, `partSize`, `partCount` |
+| POST | `/videos/:publicId/upload/parts` | Presigned `UploadPart` URLs for the requested part numbers |
+| GET | `/videos/:publicId/upload/parts` | Parts already stored (resume) |
+| POST | `/videos/:publicId/upload/complete` | Complete the upload, re-check size, `draft → processing`, enqueue job (`202`) |
+| GET | `/videos/:publicId` | Status, duration and metadata |
+| GET | `/videos/:publicId/stream` | `302` to a presigned URL; storage answers `Range` with `206` |
+| GET | `/videos/:publicId/download` | `302` to a presigned URL with `Content-Disposition: attachment` |
+| GET | `/videos/:publicId/thumbnail` | `302` to the presigned thumbnail URL |
+
+The API never receives video bytes: clients `PUT` parts straight to storage through presigned URLs.
+
+### Status lifecycle
+
+`draft` (upload started) → `processing` (upload completed, job queued) → `ready` (worker stored metadata + `thumbnails/{id}.jpg`) or `error` (`error_reason`: `INVALID_MEDIA` immediately, `PROCESSING_FAILED` after the retries, `UPLOAD_SIZE_MISMATCH` at completion). Transitions are conditional updates, so duplicate job deliveries are no-ops.
+
+### Rules
+
+- **Presigned URL signing:** URLs consumed inside Compose (the worker's FFmpeg input) are signed with the internal client; URLs returned to HTTP clients with the public client. With `NODE_ENV=test` the public endpoint equals the internal one, so tests inside `nestjs-api` can follow them.
+- **Storage keys** come from the internal video id (`videos/{id}/original`, `thumbnails/{id}.jpg`), never from the user's filename.
+- **Dependencies** for the worker are installed through `nestjs-api` (`docker compose exec nestjs-api npm install …`) — both containers share the code volume and `node_modules`.
+- `@nestjs/bullmq` is pinned to `^11.0.5` because 12.x is ES-module-only and breaks the CommonJS Jest setup; `ioredis` must stay installed (optional peer of BullMQ 6).
+
+### Environment variables (names only — see `.env.example`)
+
+`S3_ENDPOINT`, `S3_PUBLIC_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`, `REDIS_HOST`, `REDIS_PORT`, `VIDEO_MAX_SIZE_BYTES`, `VIDEO_UPLOAD_PART_SIZE_BYTES`, `VIDEO_UPLOAD_URL_TTL_SECONDS`, `VIDEO_PLAYBACK_URL_TTL_SECONDS`.
+
+### Testing
+
+- Integration and e2e tests use the real `minio` and `redis` containers.
+- `test/videos-pipeline.e2e-spec.ts` also needs `video-worker` running (`docker compose up -d`): it uploads `test/fixtures/sample.mp4` / `not-a-video.mp4` and polls until the worker finishes.
+- The `nestjs-api` container has no FFmpeg; processor tests mock it, and the pipeline e2e covers the real FFmpeg run.
+- Watch the worker with `docker compose logs -f video-worker`.
 
 ## Code Conventions
 
