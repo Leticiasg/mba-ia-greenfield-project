@@ -15,6 +15,7 @@ import {
   ApiTags,
   getSchemaPath,
 } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import type { JwtPayload } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiErrorEnvelope } from '../common/openapi/api-error-envelope.dto';
@@ -27,6 +28,10 @@ import { UploadPlanDto } from './dto/upload-plan.dto';
 import { VideoDto } from './dto/video.dto';
 import { type PlaybackKind, VideosService } from './videos.service';
 
+// ThrottlerGuard is an APP_GUARD (AuthModule), so it covers every route.
+// Its auth-sized limit (10 req/min) would block status polling and upload
+// part requests; video routes are authenticated and owner-only instead.
+@SkipThrottle()
 @ApiTags('videos')
 @ApiBearerAuth('access-token')
 @Controller('videos')
