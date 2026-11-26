@@ -11,9 +11,9 @@ scope_description: "Backend foundation for video upload and processing: queue te
 _Subprojects in scope:_
 
 - `nestjs-project/` — receives the `videos` module, the `videos` table/migration, the S3-compatible storage integration, the queue producer, the video worker (FFmpeg) and the new Compose services (object storage, queue broker, worker). Every TD below targets this subproject.
-- `next-frontend/` — no open decision. The challenge statement (`ENUNCIADO.md`) declares this phase backend-only ("a interface de vídeo não faz parte do escopo desta fase"). The upload/stream HTTP contract defined here is consumed by the frontend in a later phase.
+- `next-frontend/` — no open decision. This phase delivers the backend only (API, worker and infrastructure); the video interface is out of scope. The upload/stream HTTP contract defined here is consumed by the frontend in a later phase.
 
-_Inherited constraints (not reopened):_ `@nestjs/config` with namespaced `registerAs` + Joi env validation (phase-01-configuracao-base/TD-01..TD-04); custom JWT guard, global and `@Public()` opt-out (phase-02-auth/TD-02); `{ statusCode, error, message }` domain error envelope (phase-02-auth/TD-07); class-validator DTOs (phase-02-auth/TD-06); OpenAPI via `@nestjs/swagger` (openapi-docs-nestjs/TD-01). Object storage is **S3-compatible, MinIO locally** — given by the challenge, not a decision here; only *how* to use it is decided.
+_Inherited constraints (not reopened):_ `@nestjs/config` with namespaced `registerAs` + Joi env validation (phase-01-configuracao-base/TD-01..TD-04); custom JWT guard, global and `@Public()` opt-out (phase-02-auth/TD-02); `{ statusCode, error, message }` domain error envelope (phase-02-auth/TD-07); class-validator DTOs (phase-02-auth/TD-06); OpenAPI via `@nestjs/swagger` (openapi-docs-nestjs/TD-01). Object storage is **S3-compatible, MinIO locally** — given by the architecture (root `CLAUDE.md`), not a decision here; only *how* to use it is decided.
 
 _Installed versions checked (`nestjs-project/package-lock.json`):_ `@nestjs/common|core|platform-express` 11.1.16, `@nestjs/config` 4.0.3, `typeorm` 0.3.28, `express` 5.2.1, Node image `node:25.6.0-slim`. **None of the candidate libraries for this phase is installed** (`@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`, `bullmq`, `@nestjs/bullmq`, `pg-boss`): documentation was read at the latest versions published on Context7 and exact versions are to be pinned by `plan-resolve` in `library-refs.md`.
 
@@ -46,11 +46,11 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 - **Pros:** Mature broker with native DLX. Real queue service in Compose. Language-agnostic if the worker is ever rewritten outside Node.
 - **Cons:** Nest's RMQ transport is request/event-oriented, not a job queue: retries with backoff, attempt counting and job state must be hand-built (DLX + TTL topology). Heavier operational surface (exchanges, bindings, management UI). Most code for least benefit in a single-consumer job flow.
 
-**Recommendation:** **Option A (BullMQ + Redis)** — it is the only option with an official Nest 11 integration *and* built-in job semantics (attempts, backoff, `jobId` de-duplication, `UnrecoverableError`), and it puts a real queue service in Compose, which the challenge explicitly evaluates. The extra container is cheap locally; the `noeviction` requirement becomes a Compose setting. pg-boss is the better choice if avoiding new infrastructure mattered more than the evaluation criterion — it does not here.
+**Recommendation:** **Option A (BullMQ + Redis)** — it is the only option with an official Nest 11 integration *and* built-in job semantics (attempts, backoff, `jobId` de-duplication, `UnrecoverableError`), and it puts a dedicated queue service in Compose, matching the separate "Message Queue" container in `docs/diagrams/software-arch.mermaid`. The extra container is cheap locally; the `noeviction` requirement becomes a Compose setting. pg-boss is the better choice if avoiding new infrastructure mattered more than having that dedicated queue service — it does not here.
 
 **Decision:** A (BullMQ + Redis via `@nestjs/bullmq`)
 
-**Note:** Decision follows the Recommendation — BullMQ is the only option that combines an official Nest 11 integration with built-in retry/backoff and permanent-failure semantics, and it adds a dedicated queue service to Compose, which the acceptance criteria evaluate.
+**Note:** Decision follows the Recommendation — BullMQ is the only option that combines an official Nest 11 integration with built-in retry/backoff and permanent-failure semantics, and it adds to Compose the dedicated queue service the architecture expects.
 
 **Libraries:** bullmq, @nestjs/bullmq
 
@@ -83,7 +83,7 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 ### Option C: tus resumable protocol (tusd container or `@tus/server`)
 - Client speaks tus (`POST` + `PATCH` with offsets) to a tus server that writes to S3.
 - **Pros:** Standard resumable protocol with client libraries.
-- **Cons:** Embedded in the API (`@tus/server`), the bytes flow through Node — the exact pattern the challenge forbids. As a separate `tusd` container, it adds a fourth new service plus a hook back to the API to create/complete the draft. Duplicates what S3 multipart already provides.
+- **Cons:** Embedded in the API (`@tus/server`), the bytes flow through Node — the pattern this phase avoids, since a 10GB upload must not hold the API ("sem impacto na performance", `docs/project-plan.md`). As a separate `tusd` container, it adds a fourth new service plus a hook back to the API to create/complete the draft. Duplicates what S3 multipart already provides.
 
 **Recommendation:** **Option A (presigned multipart)** — the only option that meets 10GB on real S3, keeps the API out of the data path, and gives resume for free via per-part retry and `ListParts`, with no extra service. The handshake complexity lives in the API contract and is testable with small files (the 10GB limit is proven by the strategy plus the size validation of TD-03, not by uploading 10GB in tests).
 
@@ -161,7 +161,7 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 
 **Capability:** Transversal — covers: "Serviço de processamento em segundo plano (filas)", "Processamento automático do vídeo após upload (extração de duração e metadados)", "Geração automática de thumbnail a partir de um frame do vídeo"
 
-**Context:** The architecture lists a separate "Video Worker (FFmpeg)" container. The worker needs FFmpeg installed, access to storage and the `videos` table. Today `Dockerfile.dev` ends in `tail -f /dev/null` and has no FFmpeg. The challenge leaves the location "conforme o seu plano".
+**Context:** The architecture lists a separate "Video Worker (FFmpeg)" container. The worker needs FFmpeg installed, access to storage and the `videos` table. Today `Dockerfile.dev` ends in `tail -f /dev/null` and has no FFmpeg. Where the worker runs is left to this phase's plan.
 
 **Options:**
 
@@ -178,7 +178,7 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 ### Option C: Processor inside the API process
 - Register the `@Processor()` in the API's own module.
 - **Pros:** Zero new code location or container for the worker.
-- **Cons:** FFmpeg CPU load competes with HTTP requests in the same process; contradicts the architecture's separate worker container and the challenge's "worker subindo via docker compose".
+- **Cons:** FFmpeg CPU load competes with HTTP requests in the same process; contradicts the architecture's separate worker container, which must start with `docker compose` alongside the API.
 
 **Recommendation:** **Option A** — gives a real, separate worker container (as the architecture requires) while keeping a single source of truth for the `videos` entity, config and storage code, and a single DoD pipeline.
 
@@ -355,7 +355,7 @@ _Documentation sources (Context7):_ `/aws/aws-sdk-js-v3`, `/minio/docs`, `/websi
 
 **Capability:** Serviço de armazenamento de arquivos (vídeos e thumbnails)
 
-**Context:** The challenge fixes MinIO as the local S3 implementation. However, the MinIO community edition entered maintenance mode in December 2025 and, per several reports, stopped publishing official Docker images in October 2025. The Compose `image:` must point to something that can actually be pulled and pinned.
+**Context:** The architecture uses MinIO as the local S3 implementation (root `CLAUDE.md`: "S3-compatible; MinIO locally"). However, the MinIO community edition entered maintenance mode in December 2025 and, per several reports, stopped publishing official Docker images in October 2025. The Compose `image:` must point to something that can actually be pulled and pinned.
 
 Registry check on 2026-11-24 (`docker manifest inspect`, metadata only, `postgres:17` as control → available):
 
@@ -371,7 +371,7 @@ Registry check on 2026-11-24 (`docker manifest inspect`, metadata only, `postgre
 
 ### Option A: Pin the last community MinIO release from an official registry (`minio/minio` or `quay.io/minio/minio`)
 - Pin an exact release tag (or digest) of the final community build.
-- **Pros:** Exactly "MinIO", as the challenge states; identical S3 API behavior to what the docs describe.
+- **Pros:** Exactly "MinIO", as the architecture states; identical S3 API behavior to what the docs describe.
 - **Cons:** **Not viable** — neither official registry serves the image anymore (see the check above). Even if it did, it would receive no further security fixes.
 
 ### Option B: Chainguard-maintained MinIO image (`cgr.dev/chainguard/minio`), pinned by digest
@@ -384,7 +384,7 @@ Registry check on 2026-11-24 (`docker manifest inspect`, metadata only, `postgre
 - **Pros:** Fully reproducible and pinned by commit.
 - **Cons:** Slow first build, Go toolchain in the build, more repo surface for a dev-only dependency.
 
-**Recommendation:** **Option B** — it is the only distribution of MinIO that can be pulled today without building it ourselves, so the challenge's "MinIO in Docker" stays literal. Storage is dev-only here (production target is S3), so depending on a third-party build is acceptable, and the digest pin keeps every environment on the same version. Option C remains the fallback if the Chainguard image becomes unavailable.
+**Recommendation:** **Option B** — it is the only distribution of MinIO that can be pulled today without building it ourselves, so "MinIO in Docker" stays literal. Storage is dev-only here (production target is S3), so depending on a third-party build is acceptable, and the digest pin keeps every environment on the same version. Option C remains the fallback if the Chainguard image becomes unavailable.
 
 **Decision:** B (Chainguard MinIO image pinned by digest) — `cgr.dev/chainguard/minio@sha256:f2e56aceb4d38ad9b05c901270946e2353b19f86ba4396f25cf75b15b455b38c`. Entrypoint, command and runtime user to be confirmed on first pull; the digest is to be recorded in `library-refs.md` by `plan-resolve`.
 
@@ -398,30 +398,30 @@ Registry check on 2026-11-24 (`docker manifest inspect`, metadata only, `postgre
 
 **Capability:** Transversal — covers: "Pré-cadastro automático do vídeo como rascunho ao iniciar o upload", "Processamento automático do vídeo após upload (extração de duração e metadados)", "Geração automática de thumbnail a partir de um frame do vídeo"
 
-**Context:** The challenge requires `draft → processing → ready/error` reflected in the database. Queues deliver at least once, so the worker must be idempotent. Phase 04 introduces a *publication* flow ("rascunho → publicação") — a second meaning of "draft" that must not collide with this one. MinIO does not support the `AbortIncompleteMultipartUpload` lifecycle action, so abandoned uploads are not cleaned up by storage.
+**Context:** The video status must follow `draft → processing → ready/error` and be reflected in the database. Queues deliver at least once, so the worker must be idempotent. Phase 04 introduces a *publication* flow ("rascunho → publicação") — a second meaning of "draft" that must not collide with this one. MinIO does not support the `AbortIncompleteMultipartUpload` lifecycle action, so abandoned uploads are not cleaned up by storage.
 
 **Options:**
 
 ### Option A: Single `status` enum for the upload/processing pipeline; retries then terminal `error`
 - `status ∈ {draft, processing, ready, error}` plus `error_reason`. Transitions are conditional updates (`UPDATE … WHERE id = ? AND status = 'processing'`), so duplicates are no-ops. Job uses `attempts` + exponential `backoff` for transient errors (storage/network); invalid media (ffprobe finds no video stream / non-zero exit on parse) throws `UnrecoverableError` and goes straight to `error`. The final failure handler marks `error`. Publication/visibility (Phase 04) will be a separate column, not new values of this enum. Abandoned drafts: an owner-only `DELETE` aborting the multipart is in scope; automatic expiry of stale drafts is recorded as a separate future task.
-- **Pros:** Exactly the four states the challenge names. Idempotent by construction (conditional transition + deterministic keys from TD-09). Distinguishes transient vs. permanent failures. Keeps Phase 04 free to model publication independently.
+- **Pros:** Exactly the four states of that cycle. Idempotent by construction (conditional transition + deterministic keys from TD-09). Distinguishes transient vs. permanent failures. Keeps Phase 04 free to model publication independently.
 - **Cons:** Stale drafts accumulate until the future cleanup task exists.
 
 ### Option B: Two columns — `upload_status` and `processing_status`
 - Separate state machines for upload (`pending/uploaded/aborted`) and processing (`pending/running/done/failed`).
 - **Pros:** Finer-grained diagnostics.
-- **Cons:** Combinatorial states to validate; diverges from the four-state cycle the challenge evaluates; more API surface for clients.
+- **Cons:** Combinatorial states to validate; diverges from the four-state cycle; more API surface for clients.
 
 ### Option C: Single enum, fail fast (no retries)
 - Any worker exception marks `error`; a manual "reprocess" endpoint re-enqueues.
 - **Pros:** Simplest worker.
 - **Cons:** A transient MinIO/Redis blip permanently fails a valid 10GB upload; needs an extra endpoint to recover.
 
-**Recommendation:** **Option A** — matches the evaluated cycle one-to-one, survives transient failures automatically, gives an immediate `error` for invalid files, and avoids overloading "draft" with Phase 04's publication meaning.
+**Recommendation:** **Option A** — matches the four-state cycle one-to-one, survives transient failures automatically, gives an immediate `error` for invalid files, and avoids overloading "draft" with Phase 04's publication meaning.
 
 **Decision:** A (Single 4-state enum; retries with backoff for transient errors, immediate `error` for invalid media)
 
-**Note:** Decision follows the Recommendation — the four states match the cycle the challenge evaluates; retries absorb transient failures, invalid media fails fast, conditional transitions make duplicate deliveries harmless, and Phase 04 publication stays in a separate column.
+**Note:** Decision follows the Recommendation — the four states match the status cycle one-to-one; retries absorb transient failures, invalid media fails fast, conditional transitions make duplicate deliveries harmless, and Phase 04 publication stays in a separate column.
 
 ---
 
@@ -529,7 +529,7 @@ Registry check on 2026-11-24 (`docker manifest inspect`, metadata only, `postgre
 
 **Capability:** Transversal — covers: "Serviço de processamento em segundo plano (filas)", "Processamento automático do vídeo após upload (extração de duração e metadados)", "Geração automática de thumbnail a partir de um frame do vídeo", "Reprodução via streaming (sem necessidade de download completo)"
 
-**Context:** The challenge requires integration/e2e tests against the real Compose services (no mocks for storage/queue) and an e2e that uploads, waits for processing and checks `ready`, the thumbnail and a `206`. Tests run inside the `nestjs-api` container (backend `CLAUDE.md`), which has no FFmpeg today. The choice affects Dockerfiles, Compose and the Jest setup.
+**Context:** This phase runs integration/e2e tests against the real Compose services (no mocks for storage/queue) and an e2e that uploads, waits for processing and checks `ready`, the thumbnail and a `206`. Tests run inside the `nestjs-api` container (backend `CLAUDE.md`), which has no FFmpeg today. The choice affects Dockerfiles, Compose and the Jest setup.
 
 **Options:**
 

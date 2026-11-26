@@ -79,3 +79,13 @@ target_file: nestjs-project/test/videos-playback.e2e-spec.ts
     - expect: body `error` is `"VIDEO_NOT_FOUND"`
   2. GET /videos/:publicId without `Authorization`
     - expect: status `401`
+
+#### 1.6. status-polling-is-not-rate-limited
+
+**Covers AC:** — (regression: the app-wide `ThrottlerGuard` allows 10 requests per minute)
+**Source:** manual
+**Last sync:** 2026-11-26T00:00:00Z
+
+**Steps:**
+  1. GET /videos/:publicId (ready video) as owner, 12 times in a row
+    - expect: status `200` on every request (never `429`)

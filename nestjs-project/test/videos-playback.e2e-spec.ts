@@ -180,4 +180,13 @@ describe('videos-playback', () => {
 
     await get(`/videos/${readyVideo.public_id}`).expect(401);
   });
+
+  // 1.6 — Video routes are exempt from the auth rate limit (10 req/min)
+  it('status-polling-is-not-rate-limited', async () => {
+    for (let i = 0; i < 12; i++) {
+      await get(`/videos/${readyVideo.public_id}`, owner.accessToken).expect(
+        200,
+      );
+    }
+  });
 });
