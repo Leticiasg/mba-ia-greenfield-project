@@ -94,9 +94,9 @@ _Source files:_
 
 ### phase-03-videos/TD-01
 
-**Recommendation:** it is the only option with an official Nest 11 integration *and* built-in job semantics (attempts, backoff, `jobId` de-duplication, `UnrecoverableError`), and it puts a real queue service in Compose, which the challenge explicitly evaluates. The extra container is cheap locally; the `noeviction` requirement becomes a Compose setting. pg-boss is the better choice if avoiding new infrastructure mattered more than the evaluation criterion — it does not here.
+**Recommendation:** it is the only option with an official Nest 11 integration *and* built-in job semantics (attempts, backoff, `jobId` de-duplication, `UnrecoverableError`), and it puts a dedicated queue service in Compose, matching the separate "Message Queue" container in `docs/diagrams/software-arch.mermaid`. The extra container is cheap locally; the `noeviction` requirement becomes a Compose setting. pg-boss is the better choice if avoiding new infrastructure mattered more than having that dedicated queue service — it does not here.
 
-**Note:** Decision follows the Recommendation — BullMQ is the only option that combines an official Nest 11 integration with built-in retry/backoff and permanent-failure semantics, and it adds a dedicated queue service to Compose, which the acceptance criteria evaluate.
+**Note:** Decision follows the Recommendation — BullMQ is the only option that combines an official Nest 11 integration with built-in retry/backoff and permanent-failure semantics, and it adds to Compose the dedicated queue service the architecture expects.
 
 **Libraries:** bullmq, @nestjs/bullmq
 
@@ -191,7 +191,7 @@ _Source files:_
 
 ### phase-03-videos/TD-11
 
-**Recommendation:** it is the only distribution of MinIO that can be pulled today without building it ourselves, so the challenge's "MinIO in Docker" stays literal. Storage is dev-only here (production target is S3), so depending on a third-party build is acceptable, and the digest pin keeps every environment on the same version. Option C remains the fallback if the Chainguard image becomes unavailable.
+**Recommendation:** it is the only distribution of MinIO that can be pulled today without building it ourselves, so "MinIO in Docker" stays literal. Storage is dev-only here (production target is S3), so depending on a third-party build is acceptable, and the digest pin keeps every environment on the same version. Option C remains the fallback if the Chainguard image becomes unavailable.
 
 **Note:** Decision follows the (updated) Recommendation — the official MinIO registries no longer serve the image (checked on 2026-11-24), and the Chainguard build is the only MinIO distribution that can be pulled today without building from source.
 
@@ -199,9 +199,9 @@ _Source files:_
 
 ### phase-03-videos/TD-12
 
-**Recommendation:** matches the evaluated cycle one-to-one, survives transient failures automatically, gives an immediate `error` for invalid files, and avoids overloading "draft" with Phase 04's publication meaning.
+**Recommendation:** matches the four-state cycle one-to-one, survives transient failures automatically, gives an immediate `error` for invalid files, and avoids overloading "draft" with Phase 04's publication meaning.
 
-**Note:** Decision follows the Recommendation — the four states match the cycle the challenge evaluates; retries absorb transient failures, invalid media fails fast, conditional transitions make duplicate deliveries harmless, and Phase 04 publication stays in a separate column.
+**Note:** Decision follows the Recommendation — the four states match the status cycle one-to-one; retries absorb transient failures, invalid media fails fast, conditional transitions make duplicate deliveries harmless, and Phase 04 publication stays in a separate column.
 
 **Libraries:** —
 
